@@ -85,10 +85,6 @@ if st.session_state.preview_image is not None:
                 label_w_input, label_h_input = None, None
 
         with st.expander("2. Grid & Gaps", expanded=True):
-            
-
-[Image of printing label layout dimensions]
-
             c1, c2 = st.columns(2)
             sheet_width = c1.number_input("Sheet W", value=8.5000, step=0.1, format="%.4f")
             sheet_height = c2.number_input("Sheet H", value=11.0000, step=0.1, format="%.4f")
