@@ -76,7 +76,6 @@ if st.session_state.preview_image is not None:
             sizing_mode = st.radio("Mode", ["Auto-Fill Grid", "Specific Size"], label_visibility="collapsed")
             if sizing_mode == "Specific Size":
                 c_size1, c_size2 = st.columns(2)
-                # UPDATED: Added format and step for precision
                 label_w_input = c_size1.number_input("Width (in)", value=3.5000, step=0.0625, format="%.4f")
                 label_h_input = c_size2.number_input("Height (in)", value=2.0000, step=0.0625, format="%.4f")
                 use_custom_size = True
@@ -95,7 +94,6 @@ if st.session_state.preview_image is not None:
             
             st.markdown("---")
             st.caption("Spacing Adjustments")
-            # UPDATED: Replaced sliders with number inputs and added help text
             c5, c6 = st.columns(2)
             h_spacing = c5.number_input("Horiz. Gap", value=0.1000, step=0.05, format="%.4f", 
                                       help="The empty whitespace between columns (Left/Right)")
@@ -103,7 +101,6 @@ if st.session_state.preview_image is not None:
                                       help="The empty whitespace between rows (Up/Down)")
 
         with st.expander("3. Margins", expanded=True):
-            # UPDATED: Split into 2x2 grid to allow independent Bottom Margin
             m1, m2 = st.columns(2)
             m_top = m1.number_input("Top", value=0.5000, step=0.0625, format="%.4f")
             m_bot = m2.number_input("Bottom", value=0.5000, step=0.0625, format="%.4f")
@@ -114,7 +111,6 @@ if st.session_state.preview_image is not None:
 
         with st.expander("4. Fine Tuning"):
             show_grid = st.checkbox("Show Red Guidelines", value=True)
-            # UPDATED: Replaced slider with number input
             img_scale = st.number_input("Scale Image %", value=100, step=1)
             resize_mode = st.selectbox("Resize Mode", ["fit", "fill", "stretch"])
             start_pos = st.number_input("Start Pos #", 1, 100, 1)
@@ -124,16 +120,16 @@ if st.session_state.preview_image is not None:
     sheet_w_px = int(sheet_width * preview_dpi)
     sheet_h_px = int(sheet_height * preview_dpi)
     
-    # Calculate pixel margins based on inputs
+    # Calculate pixel margins
     mt_px = int(m_top * preview_dpi)
     ml_px = int(m_left * preview_dpi)
-    mb_px = int(m_bot * preview_dpi) # New Bottom Margin Calculation
+    mb_px = int(m_bot * preview_dpi)
     mr_px = int(m_right * preview_dpi)
     
     h_space_px = int(h_spacing * preview_dpi)
     v_space_px = int(v_spacing * preview_dpi)
     
-    # Calculate available area based on specific margins
+    # Calculate available area
     avail_w = sheet_w_px - ml_px - mr_px
     avail_h = sheet_h_px - mt_px - mb_px
 
@@ -141,7 +137,6 @@ if st.session_state.preview_image is not None:
         final_label_w = int(label_w_input * preview_dpi)
         final_label_h = int(label_h_input * preview_dpi)
     else:
-        # Avoid division by zero if rows/cols are cleared
         final_label_w = (avail_w - ((cols - 1) * h_space_px)) // max(cols, 1)
         final_label_h = (avail_h - ((rows - 1) * v_space_px)) // max(rows, 1)
 
@@ -152,7 +147,7 @@ if st.session_state.preview_image is not None:
     for pos in range(cols * rows):
         c_idx, r_idx = pos % cols, pos // cols
         
-        # Calculate X/Y based on margins and gaps
+        # Calculate X/Y
         x = ml_px + c_idx * (final_label_w + h_space_px)
         y = mt_px + r_idx * (final_label_h + v_space_px)
         
@@ -161,10 +156,27 @@ if st.session_state.preview_image is not None:
         
         visual_pos = pos + 1
         if visual_pos >= start_pos and visual_pos < (start_pos + 1):
+            
+            # --- FIXED RESIZE LOGIC FOR PREVIEW ---
             eff_w = int(final_label_w * (img_scale / 100))
             eff_h = int(final_label_h * (img_scale / 100))
-            thumb = img_preview.copy()
-            thumb.thumbnail((eff_w, eff_h), Image.LANCZOS)
+            
+            orig_w, orig_h = img_preview.size
+            thumb = None # placeholder
+
+            if resize_mode == "stretch":
+                thumb = img_preview.resize((eff_w, eff_h), Image.LANCZOS)
+            elif resize_mode == "fill":
+                ratio = max(eff_w/orig_w, eff_h/orig_h)
+                nw, nh = int(orig_w*ratio), int(orig_h*ratio)
+                thumb = img_preview.resize((nw, nh), Image.LANCZOS)
+                l, t = (nw-eff_w)//2, (nh-eff_h)//2
+                thumb = thumb.crop((l, t, l+eff_w, t+eff_h))
+            else: # fit
+                thumb = img_preview.copy()
+                thumb.thumbnail((eff_w, eff_h), Image.LANCZOS)
+
+            # Center Paste
             dest_x = x + (final_label_w - thumb.width) // 2
             dest_y = y + (final_label_h - thumb.height) // 2
             preview_sheet.paste(thumb, (dest_x, dest_y))
@@ -182,7 +194,6 @@ if st.session_state.preview_image is not None:
         # --- BATCH GENERATOR ---
         if st.button("Generate Full PDF", type="primary"):
             
-            # Progress UI
             progress_bar = st.progress(0)
             status_box = st.empty() 
             
@@ -193,7 +204,7 @@ if st.session_state.preview_image is not None:
             # High Res Margins
             f_mt = int(m_top * final_dpi)
             f_ml = int(m_left * final_dpi)
-            f_mb = int(m_bot * final_dpi) # New Bottom Margin
+            f_mb = int(m_bot * final_dpi)
             f_mr = int(m_right * final_dpi)
             
             f_hspace, f_vspace = int(h_spacing * final_dpi), int(v_spacing * final_dpi)
@@ -225,7 +236,6 @@ if st.session_state.preview_image is not None:
             # Loop through file in chunks
             while label_read_head < st.session_state.total_pages:
                 
-                # UI Update
                 batch_end = min(label_read_head + BATCH_SIZE, st.session_state.total_pages)
                 status_box.markdown(f"""
                 **Processing Batch...**
@@ -234,7 +244,6 @@ if st.session_state.preview_image is not None:
                 * *Please wait...*
                 """)
                 
-                # Load Batch
                 batch_images = convert_from_bytes(
                     file_bytes, 
                     first_page=label_read_head+1, 
@@ -242,7 +251,6 @@ if st.session_state.preview_image is not None:
                     dpi=final_dpi
                 )
                 
-                # Place Batch
                 for img in batch_images:
                     while grid_position < (start_pos - 1):
                         if (grid_position + 1) % labels_per_sheet == 0:
@@ -294,7 +302,7 @@ if st.session_state.preview_image is not None:
                 
                 # CRITICAL MEMORY CLEANUP
                 del batch_images
-                gc.collect() # Force RAM release
+                gc.collect() 
             
             # Final Sheet
             if (grid_position % labels_per_sheet) != 0:
