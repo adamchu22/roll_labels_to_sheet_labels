@@ -71,38 +71,55 @@ if st.session_state.preview_image is not None:
         else:
             st.success(f"Loaded: {st.session_state.total_pages} pages.")
 
-        # --- SETTINGS (Same as before) ---
+        # --- SETTINGS ---
         with st.expander("1. Layout Strategy", expanded=True):
             sizing_mode = st.radio("Mode", ["Auto-Fill Grid", "Specific Size"], label_visibility="collapsed")
             if sizing_mode == "Specific Size":
                 c_size1, c_size2 = st.columns(2)
-                label_w_input = c_size1.number_input("Width (in)", value=3.5, step=0.1)
-                label_h_input = c_size2.number_input("Height (in)", value=2.0, step=0.1)
+                # UPDATED: Added format and step for precision
+                label_w_input = c_size1.number_input("Width (in)", value=3.5000, step=0.0625, format="%.4f")
+                label_h_input = c_size2.number_input("Height (in)", value=2.0000, step=0.0625, format="%.4f")
                 use_custom_size = True
             else:
                 use_custom_size = False
                 label_w_input, label_h_input = None, None
 
-        with st.expander("2. Grid & Sheet", expanded=True):
+        with st.expander("2. Grid & Gaps", expanded=True):
+            
+
+[Image of printing label layout dimensions]
+
             c1, c2 = st.columns(2)
-            sheet_width = c1.number_input("Sheet W", 8.5)
-            sheet_height = c2.number_input("Sheet H", 11.0)
+            sheet_width = c1.number_input("Sheet W", value=8.5000, step=0.1, format="%.4f")
+            sheet_height = c2.number_input("Sheet H", value=11.0000, step=0.1, format="%.4f")
+            
             c3, c4 = st.columns(2)
             cols = c3.number_input("Cols", 1, 10, 3)
             rows = c4.number_input("Rows", 1, 20, 4)
-            h_spacing = st.slider("Horiz. Gap", 0.0, 1.0, 0.1, 0.05)
-            v_spacing = st.slider("Vert. Gap", 0.0, 1.0, 0.1, 0.05)
+            
+            st.markdown("---")
+            st.caption("Spacing Adjustments")
+            # UPDATED: Replaced sliders with number inputs and added help text
+            c5, c6 = st.columns(2)
+            h_spacing = c5.number_input("Horiz. Gap", value=0.1000, step=0.05, format="%.4f", 
+                                      help="The empty whitespace between columns (Left/Right)")
+            v_spacing = c6.number_input("Vert. Gap", value=0.1000, step=0.05, format="%.4f", 
+                                      help="The empty whitespace between rows (Up/Down)")
 
         with st.expander("3. Margins", expanded=True):
-            m_top = st.slider("Top Margin", 0.0, 2.0, 0.5, 0.05)
-            c_m1, c_m2 = st.columns(2)
-            m_left = c_m1.number_input("Left", 0.0, 2.0, 0.25, 0.05)
-            m_right = c_m2.number_input("Right", 0.0, 2.0, 0.25, 0.05)
-            m_bot = m_top 
+            # UPDATED: Split into 2x2 grid to allow independent Bottom Margin
+            m1, m2 = st.columns(2)
+            m_top = m1.number_input("Top", value=0.5000, step=0.0625, format="%.4f")
+            m_bot = m2.number_input("Bottom", value=0.5000, step=0.0625, format="%.4f")
+            
+            m3, m4 = st.columns(2)
+            m_left = m3.number_input("Left", value=0.2500, step=0.0625, format="%.4f")
+            m_right = m4.number_input("Right", value=0.2500, step=0.0625, format="%.4f")
 
         with st.expander("4. Fine Tuning"):
             show_grid = st.checkbox("Show Red Guidelines", value=True)
-            img_scale = st.slider("Scale Image %", 50, 150, 100)
+            # UPDATED: Replaced slider with number input
+            img_scale = st.number_input("Scale Image %", value=100, step=1)
             resize_mode = st.selectbox("Resize Mode", ["fit", "fill", "stretch"])
             start_pos = st.number_input("Start Pos #", 1, 100, 1)
 
@@ -110,17 +127,27 @@ if st.session_state.preview_image is not None:
     preview_dpi = 72 
     sheet_w_px = int(sheet_width * preview_dpi)
     sheet_h_px = int(sheet_height * preview_dpi)
-    mt_px, ml_px = int(m_top * preview_dpi), int(m_left * preview_dpi)
-    h_space_px, v_space_px = int(h_spacing * preview_dpi), int(v_spacing * preview_dpi)
-    avail_w = sheet_w_px - ml_px - int(m_right * preview_dpi)
-    avail_h = sheet_h_px - mt_px - int(m_bot * preview_dpi)
+    
+    # Calculate pixel margins based on inputs
+    mt_px = int(m_top * preview_dpi)
+    ml_px = int(m_left * preview_dpi)
+    mb_px = int(m_bot * preview_dpi) # New Bottom Margin Calculation
+    mr_px = int(m_right * preview_dpi)
+    
+    h_space_px = int(h_spacing * preview_dpi)
+    v_space_px = int(v_spacing * preview_dpi)
+    
+    # Calculate available area based on specific margins
+    avail_w = sheet_w_px - ml_px - mr_px
+    avail_h = sheet_h_px - mt_px - mb_px
 
     if use_custom_size:
         final_label_w = int(label_w_input * preview_dpi)
         final_label_h = int(label_h_input * preview_dpi)
     else:
-        final_label_w = (avail_w - ((cols - 1) * h_space_px)) // cols
-        final_label_h = (avail_h - ((rows - 1) * v_space_px)) // rows
+        # Avoid division by zero if rows/cols are cleared
+        final_label_w = (avail_w - ((cols - 1) * h_space_px)) // max(cols, 1)
+        final_label_h = (avail_h - ((rows - 1) * v_space_px)) // max(rows, 1)
 
     preview_sheet = Image.new('RGB', (sheet_w_px, sheet_h_px), 'white')
     draw = ImageDraw.Draw(preview_sheet)
@@ -128,6 +155,8 @@ if st.session_state.preview_image is not None:
     
     for pos in range(cols * rows):
         c_idx, r_idx = pos % cols, pos // cols
+        
+        # Calculate X/Y based on margins and gaps
         x = ml_px + c_idx * (final_label_w + h_space_px)
         y = mt_px + r_idx * (final_label_h + v_space_px)
         
@@ -148,6 +177,7 @@ if st.session_state.preview_image is not None:
     c_prev, c_info = st.columns([3, 1])
     with c_prev:
         st.subheader("Fast Preview")
+        st.caption("Red boxes indicate the printable area. Gaps are the white spaces between red boxes.")
         st.image(preview_sheet, use_container_width=True)
     
     with c_info:
@@ -158,29 +188,35 @@ if st.session_state.preview_image is not None:
             
             # Progress UI
             progress_bar = st.progress(0)
-            status_box = st.empty() # Placeholder for text updates
+            status_box = st.empty() 
             
             # Constants (High Res)
             final_dpi = 300
             f_sheet_w, f_sheet_h = int(sheet_width * final_dpi), int(sheet_height * final_dpi)
-            f_mt, f_ml = int(m_top * final_dpi), int(m_left * final_dpi)
+            
+            # High Res Margins
+            f_mt = int(m_top * final_dpi)
+            f_ml = int(m_left * final_dpi)
+            f_mb = int(m_bot * final_dpi) # New Bottom Margin
+            f_mr = int(m_right * final_dpi)
+            
             f_hspace, f_vspace = int(h_spacing * final_dpi), int(v_spacing * final_dpi)
             
-            f_avail_w = f_sheet_w - f_ml - int(m_right * final_dpi)
-            f_avail_h = f_sheet_h - f_mt - int(m_bot * final_dpi)
+            f_avail_w = f_sheet_w - f_ml - f_mr
+            f_avail_h = f_sheet_h - f_mt - f_mb
             
             if use_custom_size:
                 f_lbl_w = int(label_w_input * final_dpi)
                 f_lbl_h = int(label_h_input * final_dpi)
             else:
-                f_lbl_w = (f_avail_w - ((cols - 1) * f_hspace)) // cols
-                f_lbl_h = (f_avail_h - ((rows - 1) * f_vspace)) // rows
+                f_lbl_w = (f_avail_w - ((cols - 1) * f_hspace)) // max(cols, 1)
+                f_lbl_h = (f_avail_h - ((rows - 1) * f_vspace)) // max(rows, 1)
 
             # Logic
             output_sheets = []
             labels_per_sheet = cols * rows
             total_items = st.session_state.total_pages + (start_pos - 1)
-            total_out_sheets = (total_items + labels_per_sheet - 1) // labels_per_sheet
+            total_out_sheets = (total_items + labels_per_sheet - 1) // max(labels_per_sheet, 1)
             
             # Batching
             BATCH_SIZE = 50 
@@ -272,6 +308,7 @@ if st.session_state.preview_image is not None:
             status_box.success("✅ Done! Compiling PDF...")
             
             pdf_buffer = BytesIO()
-            output_sheets[0].save(pdf_buffer, "PDF", resolution=final_dpi, save_all=True, append_images=output_sheets[1:])
+            if output_sheets:
+                output_sheets[0].save(pdf_buffer, "PDF", resolution=final_dpi, save_all=True, append_images=output_sheets[1:])
             
             st.download_button("⬇️ Download Final PDF", pdf_buffer.getvalue(), "labels.pdf", "application/pdf")
